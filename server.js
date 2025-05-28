@@ -48,6 +48,11 @@ function getAgent(session) {
 
 // API Routes
 
+// Serve index.html for root and non-API routes
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 // Check session status
 app.get("/api/session", (req, res) => {
   if (req.session.authenticated) {
@@ -236,3 +241,6 @@ app.post("/api/repost", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+// Export for Vercel
+module.exports = app;
