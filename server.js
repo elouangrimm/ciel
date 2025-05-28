@@ -83,6 +83,32 @@ app.post("/api/logout", (req, res) => {
   res.json({ success: true });
 });
 
+// Get user profile
+app.get("/api/profile", async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  try {
+    const agent = getAgent(req.sessionID);
+
+    // Fetch the user's profile
+    const profile = await agent.getProfile({
+      actor: req.session.did,
+    });
+
+    res.json({
+      handle: profile.data.handle,
+      displayName: profile.data.displayName,
+      avatar: profile.data.avatar,
+      description: profile.data.description,
+    });
+  } catch (error) {
+    console.error("Profile error:", error);
+    res.status(500).json({ error: "Failed to fetch profile" });
+  }
+});
+
 // Get feed
 app.get("/api/feed", async (req, res) => {
   if (!req.session.authenticated) {

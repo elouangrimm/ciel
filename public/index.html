@@ -46,14 +46,22 @@
 
       <!-- Post Composer -->
       <div id="composer">
-        <textarea
-          id="post-text"
-          placeholder="What's happening?"
-          maxlength="300"
-        ></textarea>
-        <div class="composer-footer">
-          <span id="char-count">0/300</span>
-          <button id="post-btn">Post</button>
+        <div class="composer-avatar"></div>
+        <div class="composer-content">
+          <div class="composer-header">
+            <div class="composer-author-info">
+              <!-- Profile info will be inserted here by JavaScript -->
+            </div>
+          </div>
+          <textarea
+            id="post-text"
+            placeholder="What's happening?"
+            maxlength="300"
+          ></textarea>
+          <div class="composer-footer">
+            <span id="char-count">0/300</span>
+            <button id="post-btn">Post</button>
+          </div>
         </div>
       </div>
 

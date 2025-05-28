@@ -71,15 +71,56 @@ header {
   background: white;
   padding: 15px 20px;
   border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  gap: 10px;
+}
+
+.composer-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 24px;
+  background: #e0e0e0;
+  flex-shrink: 0;
+}
+
+.composer-content {
+  flex: 1;
+}
+
+.composer-header {
+  margin-bottom: 10px;
+}
+
+.composer-author-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.composer-display-name {
+  font-weight: 600;
+}
+
+.composer-handle {
+  color: #666;
+  font-size: 14px;
 }
 
 #post-text {
   width: 100%;
   min-height: 60px;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 0;
+  border: none;
+  outline: none;
   resize: vertical;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+#post-text::placeholder {
+  color: #999;
 }
 
 .composer-footer {
@@ -91,6 +132,24 @@ header {
 
 #char-count {
   color: #666;
+  font-size: 14px;
+}
+
+#post-btn {
+  background: none;
+  color: #666;
+  padding: 5px 10px;
+  font-size: 14px;
+  border-radius: 4px;
+}
+
+#post-btn:hover {
+  background: #f0f0f0;
+}
+
+#post-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Posts */
@@ -223,4 +282,25 @@ header {
   font-style: italic;
   text-align: center;
   padding: 8px 0;
+}
+
+/* Image hints */
+.image-hint {
+  margin: 10px 0 10px 50px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.image-placeholder {
+  width: 48px;
+  height: 48px;
+  background: #e0e0e0;
+  border-radius: 4px;
+}
+
+.image-count {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
 } 

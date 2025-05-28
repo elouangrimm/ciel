@@ -1,6 +1,7 @@
 // State
 let currentCursor = null;
 let isLoading = false;
+let currentUser = null; // Store current user info
 
 // DOM elements
 const loginScreen = document.getElementById("login-screen");
@@ -34,6 +35,8 @@ async function checkSession() {
     if (data.authenticated) {
       loginScreen.style.display = "none";
       mainScreen.style.display = "block";
+      currentUser = data; // Store user info
+      updateComposerProfile(); // Update composer with user info
       loadFeed();
     } else {
       loginScreen.style.display = "block";
@@ -42,6 +45,47 @@ async function checkSession() {
     console.error("Session check failed:", error);
     loadingEl.style.display = "none";
     loginScreen.style.display = "block";
+  }
+}
+
+// Update composer with user profile
+function updateComposerProfile() {
+  if (!currentUser) return;
+
+  // We'll need to fetch the full profile to get avatar and display name
+  fetchUserProfile();
+}
+
+// Fetch user profile
+async function fetchUserProfile() {
+  try {
+    const response = await fetch(`/api/profile`);
+    if (response.ok) {
+      const profile = await response.json();
+      currentUser = { ...currentUser, ...profile };
+
+      // Update composer UI
+      const composerAvatar = document.querySelector(".composer-avatar");
+      const authorInfoEl = document.querySelector(".composer-author-info");
+
+      if (profile.avatar) {
+        composerAvatar.style.backgroundImage = `url(${profile.avatar})`;
+        composerAvatar.style.backgroundSize = "cover";
+        composerAvatar.style.backgroundPosition = "center";
+      }
+
+      // Update author info
+      if (authorInfoEl) {
+        authorInfoEl.innerHTML = `
+          <div class="composer-display-name">${
+            profile.displayName || profile.handle
+          }</div>
+          <div class="composer-handle">@${profile.handle}</div>
+        `;
+      }
+    }
+  } catch (error) {
+    console.error("Failed to fetch profile:", error);
   }
 }
 
@@ -60,8 +104,11 @@ async function handleLogin(e) {
     });
 
     if (response.ok) {
+      const data = await response.json();
+      currentUser = { handle: data.handle };
       loginScreen.style.display = "none";
       mainScreen.style.display = "block";
+      updateComposerProfile(); // Fetch and display profile
       loadFeed();
     } else {
       showError("Login failed. Check your handle and app password.");
@@ -136,6 +183,24 @@ function createPostElement(post) {
   const handle = escapeHtml(post.author.handle);
   const content = escapeHtml(post.record.text || "");
 
+  // Check if this post has images
+  let imageHintHtml = "";
+  if (post.embed && post.embed.$type === "app.bsky.embed.images#view") {
+    const imageCount = post.embed.images?.length || 0;
+    if (imageCount > 0) {
+      imageHintHtml = `
+        <div class="image-hint">
+          <div class="image-placeholder"></div>
+          ${
+            imageCount > 1
+              ? `<span class="image-count">+${imageCount - 1}</span>`
+              : ""
+          }
+        </div>
+      `;
+    }
+  }
+
   // Check if this post has a quote (embedded record)
   let quoteHtml = "";
 
@@ -151,6 +216,26 @@ function createPostElement(post) {
   ) {
     // Quote posts with media have the record in a different location
     quotedRecord = post.embed.record?.record;
+
+    // Also check if this recordWithMedia has images
+    if (
+      post.embed.media &&
+      post.embed.media.$type === "app.bsky.embed.images#view"
+    ) {
+      const imageCount = post.embed.media.images?.length || 0;
+      if (imageCount > 0) {
+        imageHintHtml = `
+          <div class="image-hint">
+            <div class="image-placeholder"></div>
+            ${
+              imageCount > 1
+                ? `<span class="image-count">+${imageCount - 1}</span>`
+                : ""
+            }
+          </div>
+        `;
+      }
+    }
   }
 
   if (quotedRecord) {
@@ -210,6 +295,7 @@ function createPostElement(post) {
       </div>
     </div>
     <div class="content">${content}</div>
+    ${imageHintHtml}
     ${quoteHtml}
     <div class="actions">
       <button class="like-btn ${
