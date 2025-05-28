@@ -31,6 +31,16 @@ node server.js
 
 4. Open http://localhost:3000
 
+## Deployment to Vercel
+
+1. Fork or clone this repository
+2. Connect your repository to Vercel
+3. Set the following environment variable in your Vercel dashboard:
+   - `SESSION_SECRET`: A secure random string for signing session cookies
+4. Deploy!
+
+The app is configured to work with Vercel's serverless functions via the included `vercel.json` configuration.
+
 ## Usage
 
 1. Login with your Bluesky handle and app password
@@ -43,7 +53,7 @@ node server.js
 - App passwords have full account access
 - Never share your app password
 - Use HTTPS in production
-- Change the session secret in `server.js`
+- Set a secure SESSION_SECRET environment variable in production
 
 ## Limitations
 

@@ -11,31 +11,39 @@ app.use(express.json());
 app.use(express.static("public"));
 app.use(
   session({
-    secret: "your-secret-key-change-this-in-production",
+    secret:
+      process.env.SESSION_SECRET || "your-secret-key-change-this-in-production",
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: false, // Set to true in production with HTTPS
+      secure: process.env.NODE_ENV === "production", // Use secure cookies in production (HTTPS)
       maxAge: 1000 * 60 * 60 * 2, // 2 hours
+      sameSite: "lax", // Help with cross-site cookie issues
     },
   })
 );
 
-// Store agents per session
-const agents = new Map();
+// Store agents per session - removed for serverless compatibility
+// const agents = new Map();
 
 // Helper to get or create agent for session
-function getAgent(sessionId) {
-  if (!agents.has(sessionId)) {
-    agents.set(
-      sessionId,
-      new BskyAgent({
-        service: "https://bsky.social",
-      })
-    );
+function getAgent(session) {
+  const agent = new BskyAgent({
+    service: "https://bsky.social",
+  });
+
+  // If we have stored auth tokens, restore the session
+  if (session.accessJwt && session.refreshJwt) {
+    agent.session = {
+      did: session.did,
+      handle: session.handle,
+      accessJwt: session.accessJwt,
+      refreshJwt: session.refreshJwt,
+    };
   }
-  return agents.get(sessionId);
+
+  return agent;
 }
 
 // API Routes
@@ -61,12 +69,14 @@ app.post("/api/login", async (req, res) => {
       return res.status(400).json({ error: "Handle and password required" });
     }
 
-    const agent = getAgent(req.sessionID);
+    const agent = getAgent(req.session);
     const response = await agent.login({ identifier, password });
 
-    // Store auth info in session
+    // Store auth info and tokens in session
     req.session.did = response.data.did;
     req.session.handle = response.data.handle;
+    req.session.accessJwt = response.data.accessJwt;
+    req.session.refreshJwt = response.data.refreshJwt;
     req.session.authenticated = true;
 
     res.json({ success: true, handle: response.data.handle });
@@ -78,7 +88,6 @@ app.post("/api/login", async (req, res) => {
 
 // Logout
 app.post("/api/logout", (req, res) => {
-  agents.delete(req.sessionID);
   req.session.destroy();
   res.json({ success: true });
 });
@@ -90,7 +99,7 @@ app.get("/api/profile", async (req, res) => {
   }
 
   try {
-    const agent = getAgent(req.sessionID);
+    const agent = getAgent(req.session);
 
     // Fetch the user's profile
     const profile = await agent.getProfile({
@@ -116,7 +125,7 @@ app.get("/api/feed", async (req, res) => {
   }
 
   try {
-    const agent = getAgent(req.sessionID);
+    const agent = getAgent(req.session);
     const { cursor } = req.query;
 
     const timeline = await agent.getTimeline({
@@ -144,7 +153,7 @@ app.post("/api/post", async (req, res) => {
       return res.status(400).json({ error: "Invalid post text" });
     }
 
-    const agent = getAgent(req.sessionID);
+    const agent = getAgent(req.session);
     const post = await agent.post({ text });
 
     res.json({ success: true, uri: post.uri });
@@ -167,7 +176,7 @@ app.post("/api/like", async (req, res) => {
       return res.status(400).json({ error: "URI and CID required" });
     }
 
-    const agent = getAgent(req.sessionID);
+    const agent = getAgent(req.session);
     await agent.like(uri, cid);
 
     res.json({ success: true });
@@ -190,7 +199,7 @@ app.post("/api/unlike", async (req, res) => {
       return res.status(400).json({ error: "URI required" });
     }
 
-    const agent = getAgent(req.sessionID);
+    const agent = getAgent(req.session);
     await agent.deleteLike(uri);
 
     res.json({ success: true });
@@ -213,7 +222,7 @@ app.post("/api/repost", async (req, res) => {
       return res.status(400).json({ error: "URI and CID required" });
     }
 
-    const agent = getAgent(req.sessionID);
+    const agent = getAgent(req.session);
     await agent.repost(uri, cid);
 
     res.json({ success: true });
