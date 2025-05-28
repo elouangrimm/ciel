@@ -2,6 +2,7 @@
 let currentCursor = null;
 let isLoading = false;
 let currentUser = null; // Store current user info
+let authData = null; // Store auth tokens for serverless compatibility
 
 // DOM elements
 const loginScreen = document.getElementById("login-screen");
@@ -59,7 +60,9 @@ function updateComposerProfile() {
 // Fetch user profile
 async function fetchUserProfile() {
   try {
-    const response = await fetch(`/api/profile`);
+    const response = await fetch(`/api/profile`, {
+      headers: getAuthHeaders(),
+    });
     if (response.ok) {
       const profile = await response.json();
       currentUser = { ...currentUser, ...profile };
@@ -106,6 +109,17 @@ async function handleLogin(e) {
     if (response.ok) {
       const data = await response.json();
       currentUser = { handle: data.handle };
+
+      // Store auth data for serverless compatibility
+      if (data.accessJwt && data.refreshJwt) {
+        authData = {
+          did: data.did,
+          handle: data.handle,
+          accessJwt: data.accessJwt,
+          refreshJwt: data.refreshJwt,
+        };
+      }
+
       loginScreen.style.display = "none";
       mainScreen.style.display = "block";
       updateComposerProfile(); // Fetch and display profile
@@ -126,6 +140,7 @@ async function handleLogout() {
   loginForm.reset();
   feed.innerHTML = "";
   currentCursor = null;
+  authData = null; // Clear auth data
 }
 
 // Load feed
@@ -135,7 +150,9 @@ async function loadFeed() {
 
   try {
     const params = currentCursor ? `?cursor=${currentCursor}` : "";
-    const response = await fetch(`/api/feed${params}`);
+    const response = await fetch(`/api/feed${params}`, {
+      headers: getAuthHeaders(),
+    });
 
     if (!response.ok) throw new Error("Failed to load feed");
 
@@ -324,7 +341,7 @@ async function handlePost() {
   try {
     const response = await fetch("/api/post", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ text }),
     });
 
@@ -367,7 +384,7 @@ async function toggleLike(btn) {
 
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(body),
     });
 
@@ -397,7 +414,7 @@ async function toggleRepost(btn) {
   try {
     const response = await fetch("/api/repost", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ uri, cid }),
     });
 
@@ -434,4 +451,13 @@ function handleScroll() {
   if (scrollPosition >= threshold) {
     loadFeed();
   }
+}
+
+// Helper function to get auth headers
+function getAuthHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  if (authData) {
+    headers["X-Auth-Data"] = JSON.stringify(authData);
+  }
+  return headers;
 }

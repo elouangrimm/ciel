@@ -9,6 +9,10 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(express.json());
 app.use(express.static("public"));
+
+// Session configuration
+// WARNING: In production/serverless environments, you need a persistent session store
+// The default MemoryStore is not suitable for production
 app.use(
   session({
     secret:
@@ -28,19 +32,52 @@ app.use(
 // const agents = new Map();
 
 // Helper to get or create agent for session
-function getAgent(session) {
+async function getAgent(session, authHeader = null) {
   const agent = new BskyAgent({
     service: "https://bsky.social",
   });
 
-  // If we have stored auth tokens, restore the session
-  if (session.accessJwt && session.refreshJwt) {
-    agent.session = {
-      did: session.did,
-      handle: session.handle,
-      accessJwt: session.accessJwt,
-      refreshJwt: session.refreshJwt,
-    };
+  // Try to get auth from header first (for serverless compatibility)
+  if (authHeader) {
+    try {
+      const authData = JSON.parse(authHeader);
+      if (
+        authData.accessJwt &&
+        authData.refreshJwt &&
+        authData.did &&
+        authData.handle
+      ) {
+        await agent.resumeSession({
+          did: authData.did,
+          handle: authData.handle,
+          accessJwt: authData.accessJwt,
+          refreshJwt: authData.refreshJwt,
+        });
+        return agent;
+      }
+    } catch (error) {
+      console.error("Failed to parse auth header:", error);
+    }
+  }
+
+  // Fall back to session auth
+  if (
+    session.accessJwt &&
+    session.refreshJwt &&
+    session.did &&
+    session.handle
+  ) {
+    try {
+      await agent.resumeSession({
+        did: session.did,
+        handle: session.handle,
+        accessJwt: session.accessJwt,
+        refreshJwt: session.refreshJwt,
+      });
+    } catch (error) {
+      console.error("Failed to resume session:", error);
+      throw new Error("Session expired");
+    }
   }
 
   return agent;
@@ -74,7 +111,7 @@ app.post("/api/login", async (req, res) => {
       return res.status(400).json({ error: "Handle and password required" });
     }
 
-    const agent = getAgent(req.session);
+    const agent = await getAgent(req.session);
     const response = await agent.login({ identifier, password });
 
     // Store auth info and tokens in session
@@ -84,7 +121,21 @@ app.post("/api/login", async (req, res) => {
     req.session.refreshJwt = response.data.refreshJwt;
     req.session.authenticated = true;
 
-    res.json({ success: true, handle: response.data.handle });
+    // Explicitly save the session
+    req.session.save((err) => {
+      if (err) {
+        console.error("Session save error:", err);
+        return res.status(500).json({ error: "Failed to save session" });
+      }
+      // Return auth tokens to client for client-side storage as backup
+      res.json({
+        success: true,
+        handle: response.data.handle,
+        did: response.data.did,
+        accessJwt: response.data.accessJwt,
+        refreshJwt: response.data.refreshJwt,
+      });
+    });
   } catch (error) {
     console.error("Login error:", error);
     res.status(401).json({ error: "Login failed" });
@@ -99,16 +150,35 @@ app.post("/api/logout", (req, res) => {
 
 // Get user profile
 app.get("/api/profile", async (req, res) => {
-  if (!req.session.authenticated) {
+  const authHeader = req.headers["x-auth-data"];
+
+  if (!req.session.authenticated && !authHeader) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
   try {
-    const agent = getAgent(req.session);
+    console.log("Profile request - Session data:", {
+      did: req.session.did,
+      handle: req.session.handle,
+      hasAccessToken: !!req.session.accessJwt,
+      hasRefreshToken: !!req.session.refreshJwt,
+      hasAuthHeader: !!authHeader,
+    });
+
+    const agent = await getAgent(req.session, authHeader);
+
+    // Get DID from auth header if not in session
+    let actorDid = req.session.did;
+    if (!actorDid && authHeader) {
+      try {
+        const authData = JSON.parse(authHeader);
+        actorDid = authData.did;
+      } catch (e) {}
+    }
 
     // Fetch the user's profile
     const profile = await agent.getProfile({
-      actor: req.session.did,
+      actor: actorDid,
     });
 
     res.json({
@@ -125,12 +195,14 @@ app.get("/api/profile", async (req, res) => {
 
 // Get feed
 app.get("/api/feed", async (req, res) => {
-  if (!req.session.authenticated) {
+  const authHeader = req.headers["x-auth-data"];
+
+  if (!req.session.authenticated && !authHeader) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
   try {
-    const agent = getAgent(req.session);
+    const agent = await getAgent(req.session, authHeader);
     const { cursor } = req.query;
 
     const timeline = await agent.getTimeline({
@@ -147,7 +219,9 @@ app.get("/api/feed", async (req, res) => {
 
 // Create post
 app.post("/api/post", async (req, res) => {
-  if (!req.session.authenticated) {
+  const authHeader = req.headers["x-auth-data"];
+
+  if (!req.session.authenticated && !authHeader) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
@@ -158,7 +232,7 @@ app.post("/api/post", async (req, res) => {
       return res.status(400).json({ error: "Invalid post text" });
     }
 
-    const agent = getAgent(req.session);
+    const agent = await getAgent(req.session, authHeader);
     const post = await agent.post({ text });
 
     res.json({ success: true, uri: post.uri });
@@ -170,7 +244,9 @@ app.post("/api/post", async (req, res) => {
 
 // Like post
 app.post("/api/like", async (req, res) => {
-  if (!req.session.authenticated) {
+  const authHeader = req.headers["x-auth-data"];
+
+  if (!req.session.authenticated && !authHeader) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
@@ -181,7 +257,7 @@ app.post("/api/like", async (req, res) => {
       return res.status(400).json({ error: "URI and CID required" });
     }
 
-    const agent = getAgent(req.session);
+    const agent = await getAgent(req.session, authHeader);
     await agent.like(uri, cid);
 
     res.json({ success: true });
@@ -193,7 +269,9 @@ app.post("/api/like", async (req, res) => {
 
 // Unlike post
 app.post("/api/unlike", async (req, res) => {
-  if (!req.session.authenticated) {
+  const authHeader = req.headers["x-auth-data"];
+
+  if (!req.session.authenticated && !authHeader) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
@@ -204,7 +282,7 @@ app.post("/api/unlike", async (req, res) => {
       return res.status(400).json({ error: "URI required" });
     }
 
-    const agent = getAgent(req.session);
+    const agent = await getAgent(req.session, authHeader);
     await agent.deleteLike(uri);
 
     res.json({ success: true });
@@ -216,7 +294,9 @@ app.post("/api/unlike", async (req, res) => {
 
 // Repost
 app.post("/api/repost", async (req, res) => {
-  if (!req.session.authenticated) {
+  const authHeader = req.headers["x-auth-data"];
+
+  if (!req.session.authenticated && !authHeader) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
@@ -227,7 +307,7 @@ app.post("/api/repost", async (req, res) => {
       return res.status(400).json({ error: "URI and CID required" });
     }
 
-    const agent = getAgent(req.session);
+    const agent = await getAgent(req.session, authHeader);
     await agent.repost(uri, cid);
 
     res.json({ success: true });
