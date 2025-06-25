@@ -1,5 +1,5 @@
 {
-  "name": "bluesky-client",
+  "name": "ciel",
   "version": "1.0.0",
   "main": "server.js",
   "directories": {
@@ -12,7 +12,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "A hyper-minimal Bluesky client",
+  "description": "super minimal bluesky web client",
   "dependencies": {
     "@atproto/api": "^0.13.20",
     "express": "^4.21.2",
