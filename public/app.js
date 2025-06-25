@@ -8,7 +8,7 @@ let authData = null; // Store auth tokens for serverless compatibility
 const loginScreen = document.getElementById("login-screen");
 const mainScreen = document.getElementById("main-screen");
 const loginForm = document.getElementById("login-form");
-const logoutBtn = document.getElementById("logout-btn");
+//const logoutBtn = document.getElementById("logout-btn");
 const postText = document.getElementById("post-text");
 const charCount = document.getElementById("char-count");
 const postBtn = document.getElementById("post-btn");
@@ -16,7 +16,7 @@ const feed = document.getElementById("feed");
 
 // Event listeners
 loginForm.addEventListener("submit", handleLogin);
-logoutBtn.addEventListener("click", handleLogout);
+//logoutBtn.addEventListener("click", handleLogout);
 postText.addEventListener("input", updateCharCount);
 postBtn.addEventListener("click", handlePost);
 
@@ -133,6 +133,7 @@ async function handleLogin(e) {
 }
 
 // Logout
+/*
 async function handleLogout() {
   await fetch("/api/logout", { method: "POST" });
   mainScreen.style.display = "none";
@@ -142,6 +143,7 @@ async function handleLogout() {
   currentCursor = null;
   authData = null; // Clear auth data
 }
+*/
 
 // Load feed
 async function loadFeed() {
